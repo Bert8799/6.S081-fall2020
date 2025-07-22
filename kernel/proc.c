@@ -694,3 +694,21 @@ procdump(void)
     printf("\n");
   }
 }
+
+int
+lazy_allocation(struct proc *p, uint64 va)
+{
+  if (va >= p->sz || va < p->trapframe->sp)
+    return -1;
+  char *mem = kalloc();
+  if (mem == 0)
+    return -1;
+  memset(mem, 0, PGSIZE);
+  // 不用 PGROUNDDOWN 可能会导致本来是分出一页的，却分出了两页，第二页可能超出p->sz
+  // 因此 uvmunmap 没有把第二页对应的页表项清除， 导致 panic: freewalk leaf
+  if (mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) < 0) {
+    kfree(mem);
+    return -1;
+  }
+  return 0;
+}
