@@ -16,6 +16,8 @@ void kernelvec();
 
 extern int devintr();
 
+extern pte_t* walk(pagetable_t, uint64, int);
+
 void
 trapinit(void)
 {
@@ -67,6 +69,20 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if (r_scause() == 15) {
+    uint64 va = r_stval();
+    if (va >= p->sz || va >= MAXVA)
+      exit(-1);
+    pte_t *pte;
+    pte = walk(p->pagetable, va, 0);
+    if (pte == 0)
+      exit(-1);
+    if ((*pte & PTE_V) == 0)
+      exit(-1);
+    if ((*pte & PTE_C) == 0)
+      exit(-1);
+    if (cow_handler(p->pagetable, va, pte) < 0)
+      exit(-1);
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
