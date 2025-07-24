@@ -302,6 +302,14 @@ fork(void)
 
   np->state = RUNNABLE;
 
+  for (int i = 0; i < NVMA; i++) {
+    if (p->vmas[i].length > 0) {
+      memmove(&np->vmas[i], &p->vmas[i], sizeof(struct vma));
+      if (p->vmas[i].file)
+        filedup(p->vmas[i].file);
+    }
+  }
+
   release(&np->lock);
 
   return pid;
@@ -350,6 +358,15 @@ exit(int status)
       struct file *f = p->ofile[fd];
       fileclose(f);
       p->ofile[fd] = 0;
+    }
+  }
+
+  for (int i = 0; i < NVMA; i++) {
+    if (p->vmas[i].length > 0) {
+      uvmunmap(p->pagetable, p->vmas[i].addr, p->vmas[i].length / PGSIZE, 1);
+      if (p->vmas[i].file)
+        fileclose(p->vmas[i].file);
+      p->vmas[i].length = 0;
     }
   }
 

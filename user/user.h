@@ -28,6 +28,8 @@ int uptime(void);
 int stat(const char*, struct stat*);
 char* strcpy(char*, const char*);
 void *memmove(void*, const void*, int);
+void *mmap(void*, int, int, int, int, int);
+int munmap(void*, int);
 char* strchr(const char*, char c);
 int strcmp(const char*, const char*);
 void fprintf(int, const char*, ...);

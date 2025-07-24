@@ -484,3 +484,113 @@ sys_pipe(void)
   }
   return 0;
 }
+
+uint64
+sys_mmap(void)
+{
+  uint64 addr;
+  int len, prot, flags, fd, offset;
+  struct file *file;
+  struct vma *vma = 0;
+
+  if ( argaddr(0, &addr) < 0   || argint(1, &len) < 0
+    || argint(2, &prot) < 0    || argint(3, &flags) < 0
+    || argfd(4, &fd, &file) < 0 || argint(5, &offset) < 0)
+    return -1;
+  
+  if (len <= 0)
+    return -1;
+  if ((prot & (PROT_READ | PROT_WRITE | PROT_EXEC)) == 0)
+    return -1;
+  if ((prot & PROT_WRITE) && (flags & MAP_SHARED) && !file->writable)
+    return -1;
+  if ((prot & PROT_READ) && !file->readable)
+    return -1;
+  
+  struct proc *p = myproc();
+  len = PGROUNDUP(len);
+
+  if (p->sz + len >= MAXVA)
+    return -1;
+  
+  // page 粒度
+  if (offset < 0 || offset % PGSIZE)
+    return -1;
+
+  for (int i = 0; i < NVMA; i++) {
+    if (p->vmas[i].addr)
+      continue;
+    vma = &p->vmas[i];
+    break;
+  }
+
+  if (!vma)
+    return -1;
+
+  if (addr == 0)
+    vma->addr = p->sz;
+  else
+    vma->addr = addr;
+  
+  vma->length = len;
+  vma->prot = prot;
+  vma->flags = flags;
+  vma->file = file;
+  vma->offset = offset;
+
+  p->sz += len;
+
+  filedup(file);
+
+  return vma->addr;
+}
+
+uint64
+sys_munmap(void)
+{
+  uint64 addr;
+  int len;
+
+  if (argaddr(0, &addr) < 0 || argint(1, &len) < 0)
+    return -1;
+  
+  struct proc *p = myproc();
+
+  if (len <= 0 || addr + len > p->sz)
+    return -1;
+
+  addr = PGROUNDDOWN(addr);
+  len = PGROUNDUP(len);
+
+  struct vma *vma = 0;
+
+  for (int i = 0; i < NVMA; i++) {
+    if (p->vmas[i].addr && addr >= p->vmas[i].addr 
+      && addr + len <= p->vmas[i].addr + p->vmas[i].length) {
+        vma = &p->vmas[i];
+        break;
+      }
+  }
+
+  // 简化版本
+  if (!vma || addr != vma->addr)
+    return -1;
+  
+  if (vma->flags & MAP_SHARED)
+    filewrite(vma->file, addr, len);
+  
+  uvmunmap(p->pagetable, addr, len / PGSIZE, 1);
+
+  if (len == vma->length) {
+    fileclose(vma->file);
+    memset(vma, 0, sizeof(vma));
+  } else {
+    vma->addr += len;
+    vma->length -= len;
+  }
+
+  if (addr + len == p->sz)
+    p->sz -= len;
+  
+  return 0;
+}
