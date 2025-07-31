@@ -16,7 +16,8 @@ ping(uint16 sport, uint16 dport, int attempts)
 
   // 10.0.2.2, which qemu remaps to the external host,
   // i.e. the machine you're running qemu on.
-  dst = (10 << 24) | (0 << 16) | (2 << 8) | (2 << 0);
+  // dst = (10 << 24) | (0 << 16) | (2 << 8) | (2 << 0);
+  dst = (223 << 24) | (5 << 16) | (5 << 8) | (5 << 0);
 
   // you can send a UDP packet to any Internet address
   // by using a different dst.
